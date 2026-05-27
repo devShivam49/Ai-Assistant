@@ -1,0 +1,5 @@
+SpeechRecognition
+PyAudio
+pyttsx3
+ollama
+PyQt5

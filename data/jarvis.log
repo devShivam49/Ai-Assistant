@@ -1,0 +1,11 @@
+
+--- Jarvis startup error ---
+Traceback (most recent call last):
+  File "C:\Users\shiva\OneDrive\Desktop\Ai Assistant\main.py", line 53, in <module>
+    sys.exit(main())
+             ^^^^^^
+  File "C:\Users\shiva\OneDrive\Desktop\Ai Assistant\main.py", line 37, in main
+    from ui.app import JarvisApp
+  File "C:\Users\shiva\OneDrive\Desktop\Ai Assistant\ui\app.py", line 12, in <module>
+    from core.listen import calibrate, listen
+ImportError: cannot import name 'calibrate' from 'core.listen' (C:\Users\shiva\OneDrive\Desktop\Ai Assistant\core\listen.py)
