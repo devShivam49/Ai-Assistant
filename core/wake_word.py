@@ -1,22 +1,25 @@
 import re
 import speech_recognition as sr
+from core.sounddevice_mic import SoundDeviceMicrophone
 
-MIC_INDEX  = 1
 WAKE_WORDS = ("jarvis", "jervis", "jarves", "travis")
 WAKE_ONLY  = "__wake_only__"
 
 recognizer = sr.Recognizer()
 recognizer.energy_threshold         = 100
 recognizer.dynamic_energy_threshold = False
-recognizer.pause_threshold          = 0.6
+recognizer.pause_threshold          = 0.4
+recognizer.non_speaking_duration    = 0.2
 
 def init_wake():
-    print("[Wake] Calibrating...")
-    with sr.Microphone(device_index=MIC_INDEX) as source:
-        recognizer.adjust_for_ambient_noise(source, duration=0.8)
-        recognizer.energy_threshold = max(100, recognizer.energy_threshold)
-    print(f"[Wake] Ready. Threshold: {recognizer.energy_threshold:.0f}")
-    return None, None, None
+    # Return the custom microphone and recognizer instances to app.py
+    source = SoundDeviceMicrophone()
+    rec = sr.Recognizer()
+    rec.energy_threshold         = 100
+    rec.dynamic_energy_threshold = False
+    rec.pause_threshold          = 0.4
+    rec.non_speaking_duration    = 0.2
+    return source, rec, None
 
 def _strip_wake(text: str) -> str:
     for word in WAKE_WORDS:
@@ -25,17 +28,25 @@ def _strip_wake(text: str) -> str:
             return text[m.end():].strip(" ,.!?")
     return ""
 
-def detect(porcupine, stream) -> str:
-    with sr.Microphone(device_index=MIC_INDEX) as source:
-        try:
-            audio = recognizer.listen(source, timeout=4, phrase_time_limit=5)
-            text  = recognizer.recognize_google(audio, language="en-US").lower()
-            print(f"[Wake] Heard: {text}")
-        except (sr.WaitTimeoutError, sr.UnknownValueError):
-            return ""
-        except Exception as e:
-            print(f"[Wake] Error: {e}")
-            return ""
+def detect(source, rec) -> str:
+    r = rec if rec is not None else recognizer
+    
+    # Save old pause threshold and set wake-specific snappy threshold
+    old_pause = r.pause_threshold
+    r.pause_threshold = 0.4
+    
+    try:
+        # Wake word is very short. Lower phrase_time_limit to 2.0s for instant recognition.
+        audio = r.listen(source, timeout=3, phrase_time_limit=2.0)
+        text  = r.recognize_google(audio, language="en-US").lower()
+        print(f"[Wake] Heard: {text}")
+    except (sr.WaitTimeoutError, sr.UnknownValueError):
+        return ""
+    except Exception as e:
+        print(f"[Wake] Error: {e}")
+        return ""
+    finally:
+        r.pause_threshold = old_pause
 
     if any(w in text for w in WAKE_WORDS):
         cmd = _strip_wake(text)
@@ -43,4 +54,4 @@ def detect(porcupine, stream) -> str:
     return ""
 
 def cleanup(porcupine, pa, stream):
-    pass
+    pass

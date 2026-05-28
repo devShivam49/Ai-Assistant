@@ -10,7 +10,7 @@ from PyQt5.QtWidgets import (QApplication, QWidget, QVBoxLayout, QHBoxLayout,
 
 from core.brain import decide
 from core.emotion import detect_emotion
-from core.listen import listen
+from core.listen import listen, calibrate
 from core.memory import recall, remember
 from core.speak import speak
 from core.wake_word import WAKE_ONLY, cleanup, detect, init_wake
@@ -220,41 +220,82 @@ class JarvisApp(QWidget):
         porcupine = pa = stream = None
         try:
             porcupine, pa, stream = init_wake()
-            self.status_sig.emit("🎤 Say Jarvis!")
-            self.bubble_sig.emit("Say 'Jarvis' to wake me up!")
-            self.mode_sig.emit("idle")
-            print("[Voice] Ready — say 'Jarvis'")
-
-            while self.running:
-                try:
-                    cmd = detect(porcupine, stream)
-                except Exception as e:
-                    print(f"[Voice] detect error: {e}")
-                    continue
-
-                if not cmd:
-                    continue
-
-                print(f"[Voice] Wake detected, cmd='{cmd}'")
-                self.mode_sig.emit("listening")
-
-                if cmd == WAKE_ONLY:
-                    speak("Yes, I'm listening.")
-                    self.bubble_sig.emit("Yes, I'm listening...")
-                    self.status_sig.emit("Listening...")
-                    import time; time.sleep(0.3)
-                    cmd = listen()
-                    print(f"[Voice] Command heard: '{cmd}'")
-                    if not cmd:
-                        self.bubble_sig.emit("I didn't catch that.")
+            # porcupine is the SoundDeviceMicrophone instance, pa is the Recognizer instance
+            with porcupine as source:
+                self.status_sig.emit("Calibrating...")
+                self.bubble_sig.emit("Calibrating microphone...")
+                calibrate(source, pa)
+                
+                # Auto-wake and premium greeting on launch!
+                greeting = "Hey Shivam! I'm here. How can I help you today?"
+                self.bubble_sig.emit(greeting)
+                self.status_sig.emit("Greeting...")
+                self.mode_sig.emit("speaking")
+                speak(greeting)
+                
+                # Initialize active conversational session
+                active_session = True
+                cmd = None
+                
+                while self.running:
+                    if not active_session:
                         self.status_sig.emit("🎤 Say Jarvis!")
+                        self.bubble_sig.emit("Say 'Jarvis' to wake me up!")
                         self.mode_sig.emit("idle")
-                        continue
+                        
+                        try:
+                            cmd = detect(source, pa)
+                        except Exception as e:
+                            print(f"[Voice] detect error: {e}")
+                            continue
 
-                self._handle(cmd)
-                self.status_sig.emit("🎤 Say Jarvis!")
-                self.mode_sig.emit("idle")
-
+                        if not cmd:
+                            continue
+                            
+                        print(f"[Voice] Wake detected, cmd='{cmd}'")
+                        self.mode_sig.emit("listening")
+                        
+                        if cmd == WAKE_ONLY:
+                            speak("Yes, I'm listening.")
+                            self.bubble_sig.emit("Yes, I'm listening...")
+                            self.status_sig.emit("Listening...")
+                            active_session = True
+                            cmd = None
+                            continue
+                        else:
+                            active_session = True
+                    
+                    # If in active session, perform continuous listening and speaking
+                    if active_session:
+                        if cmd is None:
+                            self.status_sig.emit("Listening...")
+                            self.bubble_sig.emit("I'm listening...")
+                            self.mode_sig.emit("listening")
+                            cmd = listen(source, pa)
+                        
+                        if not cmd:
+                            # If silent, go to sleep
+                            print("[Voice] Silence detected. Going to sleep.")
+                            self.bubble_sig.emit("Going to sleep. Say 'Jarvis' if you need me!")
+                            self.status_sig.emit("🎤 Say Jarvis!")
+                            self.mode_sig.emit("idle")
+                            active_session = False
+                            cmd = None
+                            import time; time.sleep(0.5)
+                            continue
+                            
+                        print(f"[Voice] Processing command: '{cmd}'")
+                        self._handle(cmd)
+                        
+                        # Go to sleep if user says goodbye or thank you
+                        cmd_lower = cmd.lower()
+                        closing_words = ["bye", "see you", "goodnight", "thank you", "thanks", "stop", "exit", "quit"]
+                        if any(word in cmd_lower for word in closing_words):
+                            print("[Voice] Closing session on user request.")
+                            active_session = False
+                        
+                        cmd = None
+                        
         except Exception as e:
             self.status_sig.emit("Mic error — type instead")
             self.bubble_sig.emit(f"Voice error: {e}")

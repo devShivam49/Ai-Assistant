@@ -113,7 +113,7 @@ def decide(user_input: str) -> dict:
 
     try:
         res = ollama.chat(
-            model="llama3",
+            model="llama3.2",
             messages=messages,
             options={"temperature": 0.7, "num_predict": 80}
         )
