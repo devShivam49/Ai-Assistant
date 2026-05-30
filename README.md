@@ -1,6 +1,6 @@
-# Jarvis — Desktop AI Assistant
+# Chetas — Desktop AI Assistant
 
-Jarvis is a Windows desktop AI assistant that provides:
+Chetas is a Windows desktop AI assistant that provides:
 
 - Voice activation
 - Text chat
